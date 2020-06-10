@@ -17,7 +17,13 @@ const itemSchema = new mongoose.Schema({
 
 const item = mongoose.model('item', itemSchema);
 
-const workItem = mongoose.model('workItem', itemSchema);
+
+const listSchema = new mongoose.Schema({
+    name: String,
+    items: [itemSchema]
+});
+
+const List = mongoose.model('List', listSchema);
 
 const item1 = new item({
     name: "Welcome to to-do-list"
@@ -39,8 +45,9 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 app.use(express.static("public"));
 
+const day = date.getDate();
 
-
+const _ = require('lodash');
 
 
 app.get("/", function (req, res) {
@@ -58,10 +65,9 @@ app.get("/", function (req, res) {
             res.redirect("/");
         }
         else {
-            const day = date.getDate();
+            
             res.render("index", { day: day, add: items })
         }
-
 
     });
 
@@ -71,58 +77,91 @@ app.get("/", function (req, res) {
 
 app.post("/", function (req, res) {
 
-    if (req.body.type === "work") {
-        const newItem = req.body.listAdd;
+    const add = req.body.listAdd;
+    const type = req.body.type;
 
-        const newData = new workItem({
-            name: newItem
-        });
+    const newitem = new item({
+        name: add
+    });
 
-        newData.save();
-
-        res.redirect("/work")
-    }
-    else {
-        const add = req.body.listAdd;
-
-        const newitem = new item({
-            name: add
-        })
-
+    if(type===day)
+    {
         newitem.save();
 
         res.redirect("/");
     }
+    else
+    {
+        List.findOne({name:type},function(err,found) {
+         found.items.push(newitem);
+         found.save();
 
+         res.redirect("/"+type);
+        });
+    }
+
+   
 });
 
+app.get("/:custom",function (req,res) {
+    const customName = _.capitalize(req.params.custom);
+    
+    List.findOne({name:customName},function(err,foundItem) {
+          if(!err)
+          {
+              if(!foundItem){
+                const list = new List({
+                    name: customName,
+                    items: [item1,item2]
+                });
+                list.save();
+                res.redirect("/"+customName);
+              }
+           else
+           {
+               console.log("Exists");
+               res.render("index", { day: foundItem.name, add: foundItem.items })
+           }
+          }
+          else
+          {
+              console.log("error");
+          }
+    });
+   
+});
 
 app.post("/delete", function (req, res) {
     const itemId = req.body.checkbox;
+    const listName = req.body.list;
 
-    item.findByIdAndDelete(itemId, function (err) {
+    if(listName===day)
+    {
+        item.findByIdAndDelete(itemId, function (err) {
         if (err) {
             console.log(err);
         }
         else {
             console.log("Deleted");
+
         }
     });
-res.redirect("/");
+    res.redirect("/");
+}
+else
+{
+    List.findOneAndUpdate({name:listName},{$pull:{items:{_id:itemId}}}, function (err) {
+        if(!err)
+        {
+            res.redirect("/"+listName);
+        }
+    });     
+}
+
+    
 });
 
-app.get("/work", function (req, res) {
-    workItem.find({}, function (err, workitems) {
-        if (err) {
-            console.log(err);
-        }
-        else {
-            console.log(workitems);
-            res.render("index", { day: "work", add: workitems });
-        }
-    })
 
-});
 
 app.get("/about", function (req, res) {
     res.render("about")
